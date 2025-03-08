@@ -94,7 +94,8 @@ wam prefix
 wam label
 
 # List the versions and channels of a specific label. Versions numerically sorted, descending.
-wam list LABEL [-n N] { channels | versions }
+#  Use  `-r` to reverse-sort
+wam list LABEL [-r] { channels | versions }
 
 # List files for given VERSION of LABEL
 wam ls LABEL VERSION
