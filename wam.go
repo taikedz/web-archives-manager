@@ -7,6 +7,5 @@ import (
 )
 
 func main() {
-	fore, aft := goargs.SplitTokensBefore("--", os.Args[1:])
-	fmt.Printf("It works! %s / %s\n", fore, aft)
+	wam.main()
 }

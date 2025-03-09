@@ -7,6 +7,7 @@ import (
 
 type WamArgs struct {
 	action string
+	tokens []string
 }
 
 func ParseArgs() WamArgs {
