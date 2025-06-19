@@ -1,5 +1,5 @@
 package wam
 
-func main() {
+func Main() {
 	args := ParseArgs()
 }

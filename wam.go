@@ -7,5 +7,5 @@ import (
 )
 
 func main() {
-	wam.main()
+	wam.Main()
 }
