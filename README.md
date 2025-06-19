@@ -4,7 +4,7 @@ Some organisations use a folder structure down a simple diectory tree, and serve
 
 It's rudimentary artifacting, probably leftover from startup days. How about gaining a bit of control?
 
-This tool allows publishing to a local folder ("prefix"), say `/var/www/releases/`, and using a release channel path to help resolving releases.
+This tool allows publishing to a local folder ("prefix"), say `/mnt/artifacts/releases/`, and using a release channel path to help resolving releases.
 
 It also specifies a directory structure to help organise the existing tree.
 
@@ -14,8 +14,8 @@ If using WAM as a client, download becomes simply:
 
 ```sh
 # Download from a channel
-TARFILE="$(wam get "http://files.lan/releases/ProjectAlpha" -c latest)"
-# or for a specific version, `wam get "http://files.lan/releases/ProjectAlpha" -v 3.0.1`
+TARFILE="$(wam get "http://files.lan/releases/ProjectAlpha" latest)"
+# or for a specific version, `wam get "http://files.lan/releases/ProjectAlpha" v/3.0.1`
 tar xzf "$TARFILE"
 ```
 
@@ -27,7 +27,7 @@ PROJECT_URL="http://files.lan/releases/$PROJECT"
 VERSION="$(curl "$PROJECT_URL/chan/latest")"
 FILE="$PROJECT-$VERSION.tar.gz"
 
-curl "$PROJECT_URL/$VERSION/$FILE" -O "$FILE"
+curl "$PROJECT_URL/v/$VERSION/$FILE" -O "$FILE"
 tar xzf "$FILE"
 
 ```
@@ -40,49 +40,52 @@ wam prefix NAME
 
 # Unselect a prefix - return command to state where no current prefix is set
 # (prevent accidental publishing into wrong spaces)
-wam prefix --none
+wam prefix --unset
 
 # Set a prefix name and a prefix path
 wam prefix PREFIX_NAME PREFIX_PATH
 
-# Set a label under the current prefix. If no prefix is set, the command fails.
-wam label LABEL
+# Set a project name under the current prefix. If no prefix is set, the command fails.
+wam project PROJECT
 ```
 
 For most subsequent commands, a prefix must be currently active, else the commands fail. WAM does not attempt to auto-choose anything.
 
 ## Publish
 
-An existing label under the current prefix must exist, else the action fails.
+An existing project under the current prefix must exist, else the action fails; this avoids publishing to a mistype project name.
 
 ```sh
 # Publish files as a Gzip tarball, optionally include a sidecar readme file, optionally renaming it to NAME
-wam publish LABEL VERSION [-r README[:NAME]] -- FILES ...
+wam publish PROJECT VERSION [-r README[:NAME]] -- FILES ...
 
-# Specify the channels that should point to the given label/version
-wam channel LABEL VERSION -- CHANNELS ...
+# A channel is a name that points to a specific version. Typically "latest" or "stable" are names to expect. Channels can update over time.
 
-# Delete a channel from a label
-wam chan-del LABEL CHANNEL
+# Specify the channels that should point to the given project/version
+wam channel PROJECT VERSION -- CHANNELS ...
+
+# Delete a channel from a project
+wam chan-del PROJECT CHANNEL
 ```
 
 ## Cleanup
 
 ```sh
 # Mark for retention
-wam retain LABEL VERSION
+wam retain PROJECT VERSION
 
 # Remove mark for retention
-wam unretain LABEL VERSION
+wam unretain PROJECT VERSION
 
-# Remove all versions not marked for retention, or referred to by a channel
+# Remove all versions older than N days if not marked for retention, nor referred to by a channel
 # Prompts user for prefix confirmation and each deletion, unless `-f` is specified
-wam cleanup -y [-f] LABEL
+# `-y` performs the cleanup, else the items that would be removed are merely printed.
+wam cleanup -y -d N [-f] PROJECT
 ```
 
 Cleanup control:
 
-If a folder contains a file `.no-cleanup`, then the cleanup process skips the folder entirely. This can be specified at any level.
+If a version folder contains a file `.no-cleanup`, then the cleanup process skips the folder entirely.
 
 ## Query
 
@@ -90,18 +93,20 @@ If a folder contains a file `.no-cleanup`, then the cleanup process skips the fo
 # Show registered prefixes
 wam prefix
 
-# List all labels tracked in the system under the current prefix
-wam label
+# List all projects tracked in the system under the current prefix
+wam project
 
-# List the versions and channels of a specific label. Versions numerically sorted, descending.
+# List the versions and channels of a specific project.
+# Versions numerically sorted, ascending.
+# Channels alphabetically sorted and printed with their corresponding versions.
 #  Use  `-r` to reverse-sort
-wam list LABEL [-r] { channels | versions }
+wam list PROJECT [-r] { channels | versions }
 
-# List files for given VERSION of LABEL
-wam ls LABEL VERSION
+# List files for given VERSION of PROJECT
+wam ls PROJECT VERSION
 
 # List all versions not marked for retention, or referred to by a channel
-wam cleanup LABEL
+wam cleanup PROJECT
 ```
 
 ## Retrieve
@@ -111,7 +116,7 @@ WAM can be used as a download client for a location published under this suite
 ```sh
 # Performs download, and prints the downloaded file's name to stdout
 # Requires curl or wget present on system
-wam get PROJECT_URL {-c CHANNEL | -v VERSION} [-O OUTPUT_FILE]
+wam get PROJECT_URL {CHANNEL | v/VERSION} [-O OUTPUT_FILE]
 ```
 
 ## Tree structure
@@ -119,20 +124,24 @@ wam get PROJECT_URL {-c CHANNEL | -v VERSION} [-O OUTPUT_FILE]
 ```
 PREFIX/
   |
-  +- LABEL/
+  +- PROJECT/
       |
       +- chan/
-          |
-          +- channel files ...
-          |
-          +- v/
-             |
-             +- version dirs ...
+      |   |
+      |   +- channel files ...
+      |
+      +- v/
+         |
+         +- version dirs ...
+           |
+           +- PROJECT-VERSION.tar.gz
+           |
+           +- README.txt
 ```
 
 Each channel file is a simple text file containing a version name, corresponding to a version dir
 
-Each version dir contains a file with the LABEL name followed by the version.
+Each version dir contains a file with the PROJECT name followed by the version.
 
 So for a project "ProAlpha" with a stable channel pointing at version 1.0.0, and a latest pointing at 1.2 , the tree would have
 
@@ -142,3 +151,32 @@ $PREFIX/ProAlpha/chan/stable # a file containing "1.0.0"
 $PREFIX/ProAlpha/v/1.0.0/ProAlpha-1.0.0.tar.gz
 $PREFIX/ProAlpha/v/1.2/ProAlpha-1.2.tar.gz
 ```
+
+## Example session
+
+First setup
+
+```sh
+# Register a prefix to publish into
+wam prefix artifacts /mnt/artif-server/www
+wam project CoolProg
+```
+
+Publish a new release of a given project
+
+```sh
+# Ensure we are using the `artifacts` prefix
+wam prefix artifacts
+
+# Publish the contents of the bin/ directory as version 1.0.1 of the CoolProg project
+# Include a readme.txt from the docs folder, and publish it as index.txt
+wam publish CoolProg 1.0.1 -r docs/readme.txt:index.txt -- bin/*
+
+# Update the `latest` and `1.0` labels to point to the new version
+wam channels CoolProg 1.0.1 -- latest 1.0
+
+# If there are multiple prefixes possible, prevent the next user from
+#   accidentally pushing to wrong place
+wam prefix --unset
+```
+
